@@ -19,25 +19,30 @@ fn list_templates_impl() -> AppResult<Vec<Template>> {
         "SELECT id, name, description, category, checklist_items, l2_team FROM templates ORDER BY category, name"
     )?;
 
-    let templates = stmt.query_map([], |row| {
-        let template_id: i64 = row.get(0)?;
-        let checklist_json: String = row.get(4)?;
-        let checklist_items: Vec<ChecklistItem> = serde_json::from_str(&checklist_json)
-            .map_err(|e| {
-                log::error!("Corrupted checklist data for template {}: {}", template_id, e);
-                rusqlite::Error::InvalidQuery
-            })?;
+    let templates = stmt
+        .query_map([], |row| {
+            let template_id: i64 = row.get(0)?;
+            let checklist_json: String = row.get(4)?;
+            let checklist_items: Vec<ChecklistItem> = serde_json::from_str(&checklist_json)
+                .map_err(|e| {
+                    log::error!(
+                        "Corrupted checklist data for template {}: {}",
+                        template_id,
+                        e
+                    );
+                    rusqlite::Error::InvalidQuery
+                })?;
 
-        Ok(Template {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            description: row.get(2)?,
-            category: row.get(3)?,
-            checklist_items,
-            l2_team: row.get(5)?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+            Ok(Template {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                category: row.get(3)?,
+                checklist_items,
+                l2_team: row.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(templates)
 }
@@ -51,8 +56,8 @@ fn get_template_impl(id: i64) -> AppResult<Template> {
 
     let template = stmt.query_row([id], |row| {
         let checklist_json: String = row.get(4)?;
-        let checklist_items: Vec<ChecklistItem> = serde_json::from_str(&checklist_json)
-            .map_err(|e| {
+        let checklist_items: Vec<ChecklistItem> =
+            serde_json::from_str(&checklist_json).map_err(|e| {
                 log::error!("Corrupted checklist data for template {}: {}", id, e);
                 rusqlite::Error::InvalidQuery
             })?;

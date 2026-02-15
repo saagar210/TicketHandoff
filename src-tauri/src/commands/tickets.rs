@@ -10,7 +10,11 @@ pub async fn fetch_jira_ticket(app: AppHandle, ticket_id: String) -> Result<Jira
 }
 
 #[tauri::command]
-pub async fn post_to_jira(app: AppHandle, ticket_id: String, comment: String) -> Result<(), String> {
+pub async fn post_to_jira(
+    app: AppHandle,
+    ticket_id: String,
+    comment: String,
+) -> Result<(), String> {
     post_to_jira_impl(app, ticket_id, comment)
         .await
         .map_err(|e| e.to_string())
@@ -39,7 +43,7 @@ async fn attach_files_to_jira_impl(
     for file_path in &file_paths {
         let path = std::path::Path::new(file_path);
         match client.attach_file(&ticket_id, path).await {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 failed_files.push(format!("{}: {}", file_path, e));
             }
@@ -51,7 +55,8 @@ async fn attach_files_to_jira_impl(
             "Failed to attach {} file(s):\n{}",
             failed_files.len(),
             failed_files.join("\n")
-        ).into());
+        )
+        .into());
     }
 
     Ok(())

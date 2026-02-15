@@ -9,6 +9,8 @@ type DbPool = r2d2::Pool<SqliteConnectionManager>;
 type PooledConnection = r2d2::PooledConnection<SqliteConnectionManager>;
 
 static DB_POOL: Lazy<Mutex<Option<DbPool>>> = Lazy::new(|| Mutex::new(None));
+#[cfg(test)]
+pub static TEST_DB_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 pub fn init_db(db_path: &str) -> AppResult<()> {
     // Create connection pool
@@ -16,12 +18,12 @@ pub fn init_db(db_path: &str) -> AppResult<()> {
     let pool = r2d2::Pool::builder()
         .max_size(15)
         .build(manager)
-        .map_err(|e| AppError::Db(format!("Failed to create pool: {}", e).into()))?;
+        .map_err(|e| AppError::Db(format!("Failed to create pool: {}", e)))?;
 
     // Get a connection for migrations
     let conn = pool
         .get()
-        .map_err(|e| AppError::Db(format!("Failed to get connection: {}", e).into()))?;
+        .map_err(|e| AppError::Db(format!("Failed to get connection: {}", e)))?;
 
     // Run migrations
     run_migrations(&conn)?;
@@ -34,6 +36,7 @@ pub fn init_db(db_path: &str) -> AppResult<()> {
         .lock()
         .map_err(|_| AppError::Db("Pool lock poisoned".into()))?;
     *pool_guard = Some(pool);
+    drop(pool_guard);
 
     // Seed templates if empty
     seed_templates()?;
@@ -133,7 +136,7 @@ pub fn get_connection() -> AppResult<PooledConnection> {
         .as_ref()
         .ok_or(AppError::Db("Database not initialized".into()))?
         .get()
-        .map_err(|e| AppError::Db(e.to_string().into()))
+        .map_err(|e| AppError::Db(e.to_string()))
 }
 
 pub fn save_api_config(config: &ApiConfig) -> AppResult<()> {
@@ -177,10 +180,44 @@ pub fn get_api_config() -> AppResult<Option<ApiConfig>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    fn temp_db_path(test_name: &str) -> String {
+        std::env::temp_dir()
+            .join(format!(
+                "tickethandoff_{}_{}.db",
+                test_name,
+                std::process::id()
+            ))
+            .to_string_lossy()
+            .to_string()
+    }
 
     #[test]
     fn test_init_db() {
-        let result = init_db(":memory:");
+        let _guard = TEST_DB_LOCK.lock().expect("failed to lock test DB");
+        let db_path = temp_db_path("init_db");
+        let result = init_db(&db_path);
+        let _ = std::fs::remove_file(&db_path);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_init_db_does_not_deadlock() {
+        let _guard = TEST_DB_LOCK.lock().expect("failed to lock test DB");
+        let db_path = temp_db_path("init_db_timeout");
+        let (tx, rx) = mpsc::channel();
+
+        std::thread::spawn(move || {
+            let result = init_db(&db_path);
+            let _ = std::fs::remove_file(&db_path);
+            let _ = tx.send(result.is_ok());
+        });
+
+        let completed = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("init_db timed out and likely deadlocked");
+        assert!(completed, "init_db completed but returned an error");
     }
 }

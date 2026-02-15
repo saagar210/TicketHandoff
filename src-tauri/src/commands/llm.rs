@@ -17,15 +17,17 @@ async fn summarize_with_llm_impl(
     problem_summary: String,
 ) -> Result<LLMSummaryResult, Box<dyn std::error::Error>> {
     // Get Ollama config from database
-    let config = db::get_api_config()?
-        .ok_or("No API config found. Please configure Ollama in Settings.")?;
+    let config =
+        db::get_api_config()?.ok_or("No API config found. Please configure Ollama in Settings.")?;
 
     // Create Ollama client
     let client = OllamaClient::new(config.ollama_endpoint, config.ollama_model)?;
 
     // Check if Ollama is available
     if !client.is_available().await? {
-        return Err("Ollama is not running. Start it with `ollama serve` or skip the AI summary.".into());
+        return Err(
+            "Ollama is not running. Start it with `ollama serve` or skip the AI summary.".into(),
+        );
     }
 
     // Generate summary

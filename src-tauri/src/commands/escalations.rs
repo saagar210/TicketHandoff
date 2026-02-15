@@ -1,7 +1,9 @@
 use crate::commands::settings::get_jira_client;
 use crate::db;
 use crate::error::{AppError, AppResult};
-use crate::models::{ChecklistItem, Escalation, EscalationInput, EscalationStatus, EscalationSummary};
+use crate::models::{
+    ChecklistItem, Escalation, EscalationInput, EscalationStatus, EscalationSummary,
+};
 use crate::services::template_engine;
 use tauri::AppHandle;
 
@@ -36,31 +38,64 @@ fn save_escalation_impl(input: EscalationInput) -> AppResult<i64> {
     let checklist_json = serde_json::to_string(&input.checklist)
         .map_err(|e| AppError::Validation(format!("Failed to serialize checklist: {}", e)))?;
 
-    let id = conn.query_row(
-        "INSERT INTO escalations
-        (ticket_id, template_id, problem_summary, checklist, current_status, next_steps, llm_summary, llm_confidence, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        RETURNING id",
-        rusqlite::params![
-            input.ticket_id,
-            input.template_id,
-            input.problem_summary,
-            checklist_json,
-            input.current_status,
-            input.next_steps,
-            input.llm_summary,
-            input.llm_confidence,
-            "draft",
-        ],
-        |row| row.get(0),
-    )?;
+    let (id, action) = if let Some(existing_id) = input.id {
+        let rows_affected = conn.execute(
+            "UPDATE escalations
+             SET ticket_id = ?, template_id = ?, problem_summary = ?, checklist = ?,
+                 current_status = ?, next_steps = ?, llm_summary = ?, llm_confidence = ?,
+                 status = ?, updated_at = datetime('now')
+             WHERE id = ?",
+            rusqlite::params![
+                input.ticket_id,
+                input.template_id,
+                input.problem_summary,
+                checklist_json,
+                input.current_status,
+                input.next_steps,
+                input.llm_summary,
+                input.llm_confidence,
+                "draft",
+                existing_id,
+            ],
+        )?;
+
+        if rows_affected == 0 {
+            return Err(AppError::NotFound(format!(
+                "Escalation {} not found",
+                existing_id
+            )));
+        }
+
+        (existing_id, "updated")
+    } else {
+        let new_id = conn.query_row(
+            "INSERT INTO escalations
+            (ticket_id, template_id, problem_summary, checklist, current_status, next_steps, llm_summary, llm_confidence, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id",
+            rusqlite::params![
+                input.ticket_id,
+                input.template_id,
+                input.problem_summary,
+                checklist_json,
+                input.current_status,
+                input.next_steps,
+                input.llm_summary,
+                input.llm_confidence,
+                "draft",
+            ],
+            |row| row.get(0),
+        )?;
+
+        (new_id, "created")
+    };
 
     // Write audit log
     conn.execute(
         "INSERT INTO audit_log (escalation_id, action, details) VALUES (?, ?, ?)",
         rusqlite::params![
             id,
-            "created",
+            action,
             serde_json::to_string(&serde_json::json!({
                 "ticket_id": input.ticket_id,
                 "template_id": input.template_id,
@@ -82,8 +117,8 @@ fn get_escalation_impl(id: i64) -> AppResult<Escalation> {
         [id],
         |row| {
             let checklist_json: String = row.get(4)?;
-            let checklist: Vec<ChecklistItem> = serde_json::from_str(&checklist_json)
-                .map_err(|e| {
+            let checklist: Vec<ChecklistItem> =
+                serde_json::from_str(&checklist_json).map_err(|e| {
                     log::error!("Corrupted checklist data for escalation {}: {}", id, e);
                     rusqlite::Error::InvalidQuery
                 })?;
@@ -117,20 +152,21 @@ fn list_escalations_impl() -> AppResult<Vec<EscalationSummary>> {
     let mut stmt = conn.prepare(
         "SELECT id, ticket_id, problem_summary, status, created_at
         FROM escalations
-        ORDER BY created_at DESC"
+        ORDER BY created_at DESC",
     )?;
 
-    let summaries = stmt.query_map([], |row| {
-        let status_str: String = row.get(3)?;
-        Ok(EscalationSummary {
-            id: row.get(0)?,
-            ticket_id: row.get(1)?,
-            problem_summary: row.get(2)?,
-            status: EscalationStatus::from_str(&status_str),
-            created_at: row.get(4)?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let summaries = stmt
+        .query_map([], |row| {
+            let status_str: String = row.get(3)?;
+            Ok(EscalationSummary {
+                id: row.get(0)?,
+                ticket_id: row.get(1)?,
+                problem_summary: row.get(2)?,
+                status: EscalationStatus::from_str(&status_str),
+                created_at: row.get(4)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(summaries)
 }
@@ -164,7 +200,11 @@ fn render_markdown_impl(input: EscalationInput) -> AppResult<String> {
             let checklist_json: String = row.get(4)?;
             let checklist_items: Vec<ChecklistItem> = serde_json::from_str(&checklist_json)
                 .map_err(|e| {
-                    log::error!("Corrupted template checklist data for template {}: {}", template_id, e);
+                    log::error!(
+                        "Corrupted template checklist data for template {}: {}",
+                        template_id,
+                        e
+                    );
                     rusqlite::Error::InvalidQuery
                 })?;
 
@@ -176,7 +216,8 @@ fn render_markdown_impl(input: EscalationInput) -> AppResult<String> {
                 checklist_items,
                 l2_team: row.get(5)?,
             })
-        }).ok()
+        })
+        .ok()
     } else {
         None
     };
@@ -216,6 +257,7 @@ async fn post_escalation_impl(
 
     // Render markdown
     let input = EscalationInput {
+        id: Some(escalation.id),
         ticket_id: escalation.ticket_id.clone(),
         template_id: escalation.template_id,
         problem_summary: escalation.problem_summary.clone(),
@@ -232,7 +274,7 @@ async fn post_escalation_impl(
 
     // Post comment
     match client.post_comment(&escalation.ticket_id, &markdown).await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             // Update status to post_failed
             update_escalation_status(id, "post_failed", Some(&markdown), Some(&e.to_string()))?;
@@ -250,7 +292,11 @@ async fn post_escalation_impl(
     }
 
     if !failed_files.is_empty() {
-        let error_msg = format!("Failed to attach {} file(s):\n{}", failed_files.len(), failed_files.join("\n"));
+        let error_msg = format!(
+            "Failed to attach {} file(s):\n{}",
+            failed_files.len(),
+            failed_files.join("\n")
+        );
         update_escalation_status(id, "post_failed", Some(&markdown), Some(&error_msg))?;
         return Err(error_msg.into());
     }
@@ -259,11 +305,15 @@ async fn post_escalation_impl(
     update_escalation_status(id, "posted", Some(&markdown), None)?;
 
     // Write audit log
-    write_audit_log(id, "posted", &serde_json::json!({
-        "ticket_id": escalation.ticket_id,
-        "files_attached": file_paths.len(),
-        "had_llm_summary": escalation.llm_summary.is_some(),
-    }))?;
+    write_audit_log(
+        id,
+        "posted",
+        &serde_json::json!({
+            "ticket_id": escalation.ticket_id,
+            "files_attached": file_paths.len(),
+            "had_llm_summary": escalation.llm_summary.is_some(),
+        }),
+    )?;
 
     Ok(())
 }
@@ -281,6 +331,7 @@ async fn retry_post_escalation_impl(
         existing_markdown
     } else {
         let input = EscalationInput {
+            id: Some(escalation.id),
             ticket_id: escalation.ticket_id.clone(),
             template_id: escalation.template_id,
             problem_summary: escalation.problem_summary.clone(),
@@ -298,7 +349,7 @@ async fn retry_post_escalation_impl(
 
     // Post comment
     match client.post_comment(&escalation.ticket_id, &markdown).await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             update_escalation_status(id, "post_failed", Some(&markdown), Some(&e.to_string()))?;
             return Err(e.into());
@@ -315,7 +366,11 @@ async fn retry_post_escalation_impl(
     }
 
     if !failed_files.is_empty() {
-        let error_msg = format!("Failed to attach {} file(s):\n{}", failed_files.len(), failed_files.join("\n"));
+        let error_msg = format!(
+            "Failed to attach {} file(s):\n{}",
+            failed_files.len(),
+            failed_files.join("\n")
+        );
         update_escalation_status(id, "post_failed", Some(&markdown), Some(&error_msg))?;
         return Err(error_msg.into());
     }
@@ -324,10 +379,14 @@ async fn retry_post_escalation_impl(
     update_escalation_status(id, "posted", Some(&markdown), None)?;
 
     // Write audit log
-    write_audit_log(id, "retry_posted", &serde_json::json!({
-        "ticket_id": escalation.ticket_id,
-        "files_attached": file_paths.len(),
-    }))?;
+    write_audit_log(
+        id,
+        "retry_posted",
+        &serde_json::json!({
+            "ticket_id": escalation.ticket_id,
+            "files_attached": file_paths.len(),
+        }),
+    )?;
 
     Ok(())
 }
@@ -353,9 +412,13 @@ fn update_escalation_status(
 
     // Write audit log for status change
     if let Some(error) = error_details {
-        write_audit_log(id, status, &serde_json::json!({
-            "error": error,
-        }))?;
+        write_audit_log(
+            id,
+            status,
+            &serde_json::json!({
+                "error": error,
+            }),
+        )?;
     }
 
     Ok(())
@@ -369,10 +432,69 @@ fn write_audit_log(escalation_id: i64, action: &str, details: &serde_json::Value
         rusqlite::params![
             escalation_id,
             action,
-            serde_json::to_string(details)
-                .map_err(|e| AppError::Validation(format!("Failed to serialize audit log: {}", e)))?,
+            serde_json::to_string(details).map_err(|e| AppError::Validation(format!(
+                "Failed to serialize audit log: {}",
+                e
+            )))?,
         ],
     )?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_db_path(test_name: &str) -> String {
+        std::env::temp_dir()
+            .join(format!(
+                "tickethandoff_escalations_{}_{}.db",
+                test_name,
+                std::process::id()
+            ))
+            .to_string_lossy()
+            .to_string()
+    }
+
+    fn sample_input(id: Option<i64>, ticket_id: &str, summary: &str) -> EscalationInput {
+        EscalationInput {
+            id,
+            ticket_id: ticket_id.to_string(),
+            template_id: None,
+            problem_summary: summary.to_string(),
+            checklist: vec![ChecklistItem {
+                text: "Checked service status".to_string(),
+                checked: true,
+            }],
+            current_status: "Issue persists".to_string(),
+            next_steps: "Escalate to L2".to_string(),
+            llm_summary: None,
+            llm_confidence: None,
+        }
+    }
+
+    #[test]
+    fn save_escalation_updates_in_place_when_id_is_provided() {
+        let _guard = db::TEST_DB_LOCK.lock().expect("failed to lock test DB");
+        let db_path = temp_db_path("save_update");
+
+        db::init_db(&db_path).expect("failed to initialize database");
+
+        let id = save_escalation_impl(sample_input(None, "SUP-100", "Initial summary"))
+            .expect("failed to create escalation");
+
+        let updated_id = save_escalation_impl(sample_input(Some(id), "SUP-100", "Updated summary"))
+            .expect("failed to update escalation");
+
+        assert_eq!(updated_id, id);
+
+        let loaded = get_escalation_impl(id).expect("failed to load escalation");
+        assert_eq!(loaded.problem_summary, "Updated summary");
+
+        let summaries = list_escalations_impl().expect("failed to list escalations");
+        assert_eq!(summaries.len(), 1);
+
+        let _ = std::fs::remove_file(db_path);
+    }
 }

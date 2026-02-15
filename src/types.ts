@@ -38,6 +38,7 @@ export interface EscalationSummary {
 }
 
 export interface EscalationInput {
+  id?: number | null;
   ticketId: string;
   templateId: number | null;
   problemSummary: string;

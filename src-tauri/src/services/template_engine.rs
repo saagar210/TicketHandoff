@@ -57,12 +57,19 @@ mod tests {
     #[test]
     fn test_render_markdown() {
         let input = EscalationInput {
+            id: None,
             ticket_id: "TEST-123".to_string(),
             template_id: None,
             problem_summary: "User cannot access VPN".to_string(),
             checklist: vec![
-                ChecklistItem { text: "Restarted VPN client".to_string(), checked: true },
-                ChecklistItem { text: "Verified credentials".to_string(), checked: false },
+                ChecklistItem {
+                    text: "Restarted VPN client".to_string(),
+                    checked: true,
+                },
+                ChecklistItem {
+                    text: "Verified credentials".to_string(),
+                    checked: false,
+                },
             ],
             current_status: "VPN still not connecting".to_string(),
             next_steps: "Check firewall settings".to_string(),
