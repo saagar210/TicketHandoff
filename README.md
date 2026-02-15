@@ -312,7 +312,7 @@ TicketHandoff/
 ### "Database initialization failed"
 **Symptoms:** App won't start
 **Fixes:**
-- Check disk permissions: App needs write access to `~/Library/Application Support/com.tickethandoff.app/`
+- Check disk permissions: App needs write access to `~/Library/Application Support/com.tickethandoff.desktop/`
 - Free up disk space if drive is full
 - Restart app (connection pooling will retry)
 

@@ -8,6 +8,32 @@ mod services;
 use commands::{escalations, llm, settings, templates, tickets};
 use tauri::Manager;
 
+fn migrate_legacy_db(app_data_dir: &std::path::Path) -> Result<(), String> {
+    let db_path = app_data_dir.join("tickets.db");
+    if db_path.exists() {
+        return Ok(());
+    }
+
+    let Some(parent_dir) = app_data_dir.parent() else {
+        return Ok(());
+    };
+
+    let legacy_db = parent_dir.join("com.tickethandoff.app").join("tickets.db");
+    if !legacy_db.exists() {
+        return Ok(());
+    }
+
+    std::fs::copy(&legacy_db, &db_path).map_err(|e| {
+        format!(
+            "Failed to migrate existing database from {}: {}",
+            legacy_db.display(),
+            e
+        )
+    })?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -21,6 +47,8 @@ pub fn run() {
 
             std::fs::create_dir_all(&app_data_dir)
                 .map_err(|e| format!("Cannot create app directory: {}. Check disk permissions.", e))?;
+
+            migrate_legacy_db(&app_data_dir)?;
 
             let db_path = app_data_dir.join("tickets.db");
             let db_path_str = db_path.to_str()
