@@ -69,6 +69,7 @@ pub struct EscalationSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EscalationInput {
+    pub id: Option<i64>,
     pub ticket_id: String,
     pub template_id: Option<i64>,
     pub problem_summary: String,

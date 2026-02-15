@@ -36,3 +36,6 @@ src-tauri/target
 
 # Stronghold vault files
 *.hold
+
+# Codex local audit workspace
+.codex_audit/

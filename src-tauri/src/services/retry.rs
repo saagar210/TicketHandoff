@@ -78,9 +78,7 @@ fn is_retryable(error: &AppError) -> bool {
         }
         // Ollama errors
         AppError::Ollama(msg) => {
-            msg.contains("connection")
-                || msg.contains("timeout")
-                || msg.contains("unavailable")
+            msg.contains("connection") || msg.contains("timeout") || msg.contains("unavailable")
         }
         // Don't retry these
         AppError::Db(_)
@@ -120,8 +118,12 @@ mod tests {
     #[test]
     fn test_retryable_errors() {
         // Retryable
-        assert!(is_retryable(&AppError::Jira("429 Too Many Requests".into())));
-        assert!(is_retryable(&AppError::Jira("503 Service Unavailable".into())));
+        assert!(is_retryable(&AppError::Jira(
+            "429 Too Many Requests".into()
+        )));
+        assert!(is_retryable(&AppError::Jira(
+            "503 Service Unavailable".into()
+        )));
         assert!(is_retryable(&AppError::Ollama("connection refused".into())));
 
         // Not retryable

@@ -146,13 +146,13 @@ export default function Settings() {
 
             <div>
               <label htmlFor="jiraApiToken" className="block text-sm font-medium text-gray-700 mb-1">
-                API Token *
+                API Token
               </label>
               <input
-                {...register('jiraApiToken', { required: true })}
+                {...register('jiraApiToken')}
                 type="password"
                 id="jiraApiToken"
-                placeholder="Enter your Jira API token"
+                placeholder="Enter your Jira API token (leave blank to keep current token)"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <p className="mt-1 text-xs text-gray-500">
@@ -165,6 +165,7 @@ export default function Settings() {
                 >
                   https://id.atlassian.com/manage-profile/security/api-tokens
                 </a>
+                {' '}and leave blank only if you already saved a token before.
               </p>
             </div>
 

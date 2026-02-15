@@ -40,7 +40,10 @@ impl JiraClient {
 
     fn auth_header(&self) -> String {
         let credentials = format!("{}:{}", self.email, self.api_token);
-        let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, credentials.as_bytes());
+        let encoded = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            credentials.as_bytes(),
+        );
         format!("Basic {}", encoded)
     }
 
@@ -86,7 +89,10 @@ impl JiraClient {
         Ok(JiraTicket {
             key: jira_response.key,
             summary: jira_response.fields.summary,
-            description: jira_response.fields.description.or(Some("No description provided".to_string())),
+            description: jira_response
+                .fields
+                .description
+                .or(Some("No description provided".to_string())),
             status: jira_response.fields.status.name,
             reporter: jira_response.fields.reporter.map(|r| JiraUser {
                 display_name: r.display_name,
@@ -138,7 +144,10 @@ impl JiraClient {
                 key
             )));
         } else if !status.is_success() {
-            return Err(AppError::Jira(format!("Failed to post comment: {}", status)));
+            return Err(AppError::Jira(format!(
+                "Failed to post comment: {}",
+                status
+            )));
         }
 
         Ok(())
@@ -221,7 +230,10 @@ impl JiraClient {
         if status == 401 {
             return Err(AppError::Jira("Invalid credentials".to_string()));
         } else if !status.is_success() {
-            return Err(AppError::Jira(format!("Connection test failed: {}", status)));
+            return Err(AppError::Jira(format!(
+                "Connection test failed: {}",
+                status
+            )));
         }
 
         let myself: JiraMyselfResponse = response.json().await?;

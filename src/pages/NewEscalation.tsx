@@ -26,6 +26,8 @@ export default function NewEscalation() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const escalationId = searchParams.get('id');
+  const parsedEscalationId = escalationId ? Number.parseInt(escalationId, 10) : NaN;
+  const editingEscalationId = Number.isFinite(parsedEscalationId) ? parsedEscalationId : null;
   const toastContext = useContext(ToastContext);
 
   if (!toastContext) {
@@ -62,10 +64,10 @@ export default function NewEscalation() {
 
   // Load existing escalation if editing
   useEffect(() => {
-    if (escalationId) {
-      loadEscalation(parseInt(escalationId));
+    if (editingEscalationId) {
+      loadEscalation(editingEscalationId);
     }
-  }, [escalationId]);
+  }, [editingEscalationId]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -190,6 +192,7 @@ export default function NewEscalation() {
     setGenerating(true);
     try {
       const input: EscalationInput = {
+        id: editingEscalationId,
         ticketId: formData.ticketId,
         templateId: formData.templateId,
         problemSummary: formData.problemSummary,
@@ -212,6 +215,7 @@ export default function NewEscalation() {
 
   const handleSaveDraft = async () => {
     const input: EscalationInput = {
+      id: editingEscalationId,
       ticketId: formData.ticketId,
       templateId: formData.templateId,
       problemSummary: formData.problemSummary,
@@ -231,6 +235,7 @@ export default function NewEscalation() {
 
   const handleSaveAndPost = async (): Promise<number | null> => {
     const input: EscalationInput = {
+      id: editingEscalationId,
       ticketId: formData.ticketId,
       templateId: formData.templateId,
       problemSummary: formData.problemSummary,
@@ -258,6 +263,7 @@ export default function NewEscalation() {
   const livePreview = useMemo(() => {
     if (!debouncedFormData.ticketId) return '';
     const input: EscalationInput = {
+      id: editingEscalationId,
       ticketId: debouncedFormData.ticketId,
       templateId: debouncedFormData.templateId,
       problemSummary: debouncedFormData.problemSummary,

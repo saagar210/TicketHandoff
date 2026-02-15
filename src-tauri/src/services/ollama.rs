@@ -41,11 +41,19 @@ impl OllamaClient {
         }
     }
 
-    pub async fn summarize(&self, checklist: &[ChecklistItem], problem: &str) -> AppResult<LLMSummaryResult> {
+    pub async fn summarize(
+        &self,
+        checklist: &[ChecklistItem],
+        problem: &str,
+    ) -> AppResult<LLMSummaryResult> {
         retry_with_backoff(|| self.summarize_impl(checklist, problem)).await
     }
 
-    async fn summarize_impl(&self, checklist: &[ChecklistItem], problem: &str) -> AppResult<LLMSummaryResult> {
+    async fn summarize_impl(
+        &self,
+        checklist: &[ChecklistItem],
+        problem: &str,
+    ) -> AppResult<LLMSummaryResult> {
         // Build the prompt
         let prompt = self.build_prompt(checklist, problem);
 
@@ -123,7 +131,10 @@ Keep it concise. Only include steps from the checklist above. Do not invent step
         let checked = checklist.iter().filter(|item| item.checked).count();
 
         if total == 0 {
-            return ("Low".to_string(), "No troubleshooting steps provided".to_string());
+            return (
+                "Low".to_string(),
+                "No troubleshooting steps provided".to_string(),
+            );
         }
 
         let percentage = (checked as f64 / total as f64) * 100.0;
@@ -135,17 +146,26 @@ Keep it concise. Only include steps from the checklist above. Do not invent step
         if total >= 5 && percentage >= 60.0 {
             (
                 "High".to_string(),
-                format!("Based on {} checklist items, {} completed ({:.0}%)", total, checked, percentage),
+                format!(
+                    "Based on {} checklist items, {} completed ({:.0}%)",
+                    total, checked, percentage
+                ),
             )
-        } else if total >= 3 && total <= 4 {
+        } else if (3..=4).contains(&total) {
             (
                 "Medium".to_string(),
-                format!("Based on {} checklist items, {} completed ({:.0}%)", total, checked, percentage),
+                format!(
+                    "Based on {} checklist items, {} completed ({:.0}%)",
+                    total, checked, percentage
+                ),
             )
         } else if total >= 5 && percentage < 60.0 {
             (
                 "Medium".to_string(),
-                format!("Based on {} checklist items, only {} completed ({:.0}%)", total, checked, percentage),
+                format!(
+                    "Based on {} checklist items, only {} completed ({:.0}%)",
+                    total, checked, percentage
+                ),
             )
         } else {
             (
@@ -174,14 +194,33 @@ mod tests {
 
     #[test]
     fn test_confidence_high() {
-        let client = OllamaClient::new("http://localhost:11434".to_string(), "llama3".to_string()).unwrap();
+        let client =
+            OllamaClient::new("http://localhost:11434".to_string(), "llama3".to_string()).unwrap();
         let checklist = vec![
-            ChecklistItem { text: "Step 1".to_string(), checked: true },
-            ChecklistItem { text: "Step 2".to_string(), checked: true },
-            ChecklistItem { text: "Step 3".to_string(), checked: true },
-            ChecklistItem { text: "Step 4".to_string(), checked: true },
-            ChecklistItem { text: "Step 5".to_string(), checked: false },
-            ChecklistItem { text: "Step 6".to_string(), checked: false },
+            ChecklistItem {
+                text: "Step 1".to_string(),
+                checked: true,
+            },
+            ChecklistItem {
+                text: "Step 2".to_string(),
+                checked: true,
+            },
+            ChecklistItem {
+                text: "Step 3".to_string(),
+                checked: true,
+            },
+            ChecklistItem {
+                text: "Step 4".to_string(),
+                checked: true,
+            },
+            ChecklistItem {
+                text: "Step 5".to_string(),
+                checked: false,
+            },
+            ChecklistItem {
+                text: "Step 6".to_string(),
+                checked: false,
+            },
         ];
         let (confidence, _) = client.calculate_confidence(&checklist);
         assert_eq!(confidence, "High");
@@ -189,11 +228,21 @@ mod tests {
 
     #[test]
     fn test_confidence_medium() {
-        let client = OllamaClient::new("http://localhost:11434".to_string(), "llama3".to_string()).unwrap();
+        let client =
+            OllamaClient::new("http://localhost:11434".to_string(), "llama3".to_string()).unwrap();
         let checklist = vec![
-            ChecklistItem { text: "Step 1".to_string(), checked: true },
-            ChecklistItem { text: "Step 2".to_string(), checked: false },
-            ChecklistItem { text: "Step 3".to_string(), checked: false },
+            ChecklistItem {
+                text: "Step 1".to_string(),
+                checked: true,
+            },
+            ChecklistItem {
+                text: "Step 2".to_string(),
+                checked: false,
+            },
+            ChecklistItem {
+                text: "Step 3".to_string(),
+                checked: false,
+            },
         ];
         let (confidence, _) = client.calculate_confidence(&checklist);
         assert_eq!(confidence, "Medium");
@@ -201,20 +250,29 @@ mod tests {
 
     #[test]
     fn test_confidence_low() {
-        let client = OllamaClient::new("http://localhost:11434".to_string(), "llama3".to_string()).unwrap();
-        let checklist = vec![
-            ChecklistItem { text: "Step 1".to_string(), checked: true },
-        ];
+        let client =
+            OllamaClient::new("http://localhost:11434".to_string(), "llama3".to_string()).unwrap();
+        let checklist = vec![ChecklistItem {
+            text: "Step 1".to_string(),
+            checked: true,
+        }];
         let (confidence, _) = client.calculate_confidence(&checklist);
         assert_eq!(confidence, "Low");
     }
 
     #[test]
     fn test_prompt_formatting() {
-        let client = OllamaClient::new("http://localhost:11434".to_string(), "llama3".to_string()).unwrap();
+        let client =
+            OllamaClient::new("http://localhost:11434".to_string(), "llama3".to_string()).unwrap();
         let checklist = vec![
-            ChecklistItem { text: "Restarted VPN".to_string(), checked: true },
-            ChecklistItem { text: "Checked logs".to_string(), checked: false },
+            ChecklistItem {
+                text: "Restarted VPN".to_string(),
+                checked: true,
+            },
+            ChecklistItem {
+                text: "Checked logs".to_string(),
+                checked: false,
+            },
         ];
         let prompt = client.build_prompt(&checklist, "VPN connection fails");
         assert!(prompt.contains("VPN connection fails"));

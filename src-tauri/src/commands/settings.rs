@@ -6,27 +6,44 @@ use tauri::AppHandle;
 
 #[tauri::command]
 pub async fn save_api_config(_app: AppHandle, config: ApiConfig) -> Result<(), String> {
-    save_api_config_impl(config)
-        .map_err(|e| e.to_string())
+    save_api_config_impl(config).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn get_api_config(_app: AppHandle) -> Result<Option<ApiConfig>, String> {
-    get_api_config_impl()
-        .map_err(|e| e.to_string())
+    get_api_config_impl().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn test_jira_connection(_app: AppHandle) -> Result<String, String> {
-    test_jira_connection_impl()
-        .await
-        .map_err(|e| e.to_string())
+    test_jira_connection_impl().await.map_err(|e| e.to_string())
 }
 
 fn save_api_config_impl(config: ApiConfig) -> Result<(), Box<dyn std::error::Error>> {
-    // Save Jira credentials to keychain
-    if !config.jira_base_url.is_empty() && !config.jira_email.is_empty() && !config.jira_api_token.is_empty() {
-        keychain::save_jira_credentials(&config.jira_base_url, &config.jira_email, &config.jira_api_token)?;
+    let has_any_jira_input = !config.jira_base_url.is_empty()
+        || !config.jira_email.is_empty()
+        || !config.jira_api_token.is_empty();
+
+    if has_any_jira_input {
+        if config.jira_base_url.is_empty() || config.jira_email.is_empty() {
+            return Err("Jira base URL and email are required when saving Jira settings.".into());
+        }
+
+        if !config.jira_api_token.is_empty() {
+            keychain::save_jira_credentials(
+                &config.jira_base_url,
+                &config.jira_email,
+                &config.jira_api_token,
+            )?;
+        } else {
+            let (_, existing_token) = keychain::get_jira_credentials(&config.jira_email)
+                .map_err(|_| "Jira API token is required for initial setup.")?;
+            keychain::save_jira_credentials(
+                &config.jira_base_url,
+                &config.jira_email,
+                &existing_token,
+            )?;
+        }
     }
 
     // Save Ollama config to database
@@ -36,30 +53,30 @@ fn save_api_config_impl(config: ApiConfig) -> Result<(), Box<dyn std::error::Err
 
 fn get_api_config_impl() -> Result<Option<ApiConfig>, Box<dyn std::error::Error>> {
     // Get Ollama config from database
-    let mut config = db::get_api_config()?
-        .unwrap_or_else(|| ApiConfig {
-            jira_base_url: String::new(),
-            jira_email: String::new(),
-            jira_api_token: String::new(),
-            ollama_endpoint: "http://localhost:11434".to_string(),
-            ollama_model: "llama3".to_string(),
-        });
+    let mut config = db::get_api_config()?.unwrap_or_else(|| ApiConfig {
+        jira_base_url: String::new(),
+        jira_email: String::new(),
+        jira_api_token: String::new(),
+        ollama_endpoint: "http://localhost:11434".to_string(),
+        ollama_model: "llama3".to_string(),
+    });
 
-    // Try to get Jira config from keychain (for display purposes only)
-    // We don't know the email at this point, so we'll just return empty for now
-    // The frontend will need to track the email separately or we need another approach
-
-    // For now, just indicate if credentials exist by checking if email is provided
-    // This is a simplification - real implementation would need email tracking
-    config.jira_api_token = "••••••".to_string(); // Masked for display
+    if !config.jira_email.is_empty() {
+        if let Ok((base_url, _token)) = keychain::get_jira_credentials(&config.jira_email) {
+            config.jira_base_url = base_url;
+            // Never return plaintext token to frontend.
+            config.jira_api_token = "••••••".to_string();
+        } else {
+            config.jira_api_token.clear();
+        }
+    }
 
     Ok(Some(config))
 }
 
 fn get_api_config_for_use() -> Result<Option<ApiConfig>, Box<dyn std::error::Error>> {
     // Get Ollama config from database
-    let mut config = db::get_api_config()?
-        .ok_or("No API configuration found")?;
+    let mut config = db::get_api_config()?.ok_or("No API configuration found")?;
 
     // Try to retrieve Jira credentials from keychain
     // We need to get the email from somewhere - for now, check if we have it in config
