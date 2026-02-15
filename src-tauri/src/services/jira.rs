@@ -1,5 +1,6 @@
 use crate::error::{AppError, AppResult};
 use crate::models::{JiraComment, JiraTicket, JiraUser};
+use crate::services::adf;
 use crate::services::retry::retry_with_backoff;
 use crate::services::ticket_system::TicketSystemClient;
 use async_trait::async_trait;
@@ -85,7 +86,7 @@ impl JiraClient {
         Ok(JiraTicket {
             key: jira_response.key,
             summary: jira_response.fields.summary,
-            description: jira_response.fields.description,
+            description: jira_response.fields.description.or(Some("No description provided".to_string())),
             status: jira_response.fields.status.name,
             reporter: jira_response.fields.reporter.map(|r| JiraUser {
                 display_name: r.display_name,
@@ -116,19 +117,9 @@ impl JiraClient {
     async fn post_comment_impl(&self, key: &str, body: &str) -> AppResult<()> {
         let url = format!("{}/rest/api/3/issue/{}/comment", self.base_url, key);
 
-        // Wrap plain text in minimal ADF structure
+        // Convert markdown to ADF
         let adf_body = serde_json::json!({
-            "body": {
-                "type": "doc",
-                "version": 1,
-                "content": [{
-                    "type": "paragraph",
-                    "content": [{
-                        "type": "text",
-                        "text": body
-                    }]
-                }]
-            }
+            "body": adf::markdown_to_adf(body)
         });
 
         let response = self

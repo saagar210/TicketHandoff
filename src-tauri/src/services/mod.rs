@@ -1,3 +1,4 @@
+pub mod adf;
 pub mod jira;
 pub mod ollama;
 pub mod retry;
