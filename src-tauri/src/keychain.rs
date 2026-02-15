@@ -31,6 +31,7 @@ pub fn get_jira_credentials(email: &str) -> AppResult<(String, String)> {
 }
 
 /// Delete Jira credentials from macOS Keychain
+#[allow(dead_code)]
 pub fn delete_jira_credentials(email: &str) -> AppResult<()> {
     delete_generic_password(SERVICE_NAME, email)
         .map_err(|e| AppError::Keychain(format!("Failed to delete credentials: {}", e)))?;
@@ -39,6 +40,7 @@ pub fn delete_jira_credentials(email: &str) -> AppResult<()> {
 }
 
 /// Check if credentials exist in keychain
+#[allow(dead_code)]
 pub fn credentials_exist(email: &str) -> bool {
     get_generic_password(SERVICE_NAME, email).is_ok()
 }

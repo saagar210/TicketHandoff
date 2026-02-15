@@ -48,16 +48,6 @@ pub enum EscalationStatus {
 }
 
 impl EscalationStatus {
-    #[allow(dead_code)]
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            EscalationStatus::Draft => "draft",
-            EscalationStatus::Posted => "posted",
-            EscalationStatus::PostedWithErrors => "posted_with_errors",
-            EscalationStatus::PostFailed => "post_failed",
-        }
-    }
-
     pub fn from_str(s: &str) -> Self {
         match s {
             "posted" => EscalationStatus::Posted,
