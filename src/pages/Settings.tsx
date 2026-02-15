@@ -69,13 +69,31 @@ export default function Settings() {
   const handleTestConnection = async () => {
     setTesting(true);
     setTestResult(null);
+    setMessage(null);
     try {
       const result = await testJiraConnection();
       setTestResult(result);
-      setMessage({ type: 'success', text: 'Connection successful!' });
+      setMessage({
+        type: 'success',
+        text: `✓ Connected successfully! ${result}`
+      });
     } catch (error) {
       setTestResult(null);
-      setMessage({ type: 'error', text: `Connection failed: ${error}` });
+      const errorMsg = String(error);
+      let helpText = 'Check your credentials and try again.';
+
+      if (errorMsg.includes('Invalid credentials')) {
+        helpText = 'Your email or API token is incorrect. Generate a new token at https://id.atlassian.com/manage-profile/security/api-tokens';
+      } else if (errorMsg.includes('timed out') || errorMsg.includes('timeout')) {
+        helpText = 'Connection timed out. Check your Jira URL and network connection.';
+      } else if (errorMsg.includes('No API config')) {
+        helpText = 'Please fill in all required fields before testing.';
+      }
+
+      setMessage({
+        type: 'error',
+        text: `Connection failed: ${errorMsg}. ${helpText}`
+      });
     } finally {
       setTesting(false);
     }

@@ -58,6 +58,31 @@ export default function NewEscalation() {
     }
   }, [escalationId]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+S (Mac) or Ctrl+S (Windows/Linux) - Save as draft
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleSaveDraft();
+      }
+      // Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) - Preview & Review
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (formData.ticketId) {
+          generatePreview();
+        }
+      }
+      // Escape - Cancel/Close modal
+      if (e.key === 'Escape' && showReviewModal) {
+        setShowReviewModal(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData, checklist, llmSummary, llmConfidence, showReviewModal]);
+
   const loadEscalation = async (id: number) => {
     const escalation = await getEscalation(id);
     if (escalation) {
@@ -291,9 +316,18 @@ export default function NewEscalation() {
           {/* Error message when fetch fails */}
           {ticketError && (
             <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm">
-              <div className="font-medium">Could not fetch ticket: {ticketError}</div>
-              <div className="mt-1 text-red-700">
-                You can still fill out the form manually.
+              <div className="font-medium">⚠️ Could not fetch ticket</div>
+              <div className="mt-1 text-red-700">{ticketError}</div>
+              <div className="mt-2 text-red-700">
+                {ticketError.includes('Invalid credentials') && (
+                  <>Check your Jira credentials in <button onClick={() => navigate('/settings')} className="underline font-medium">Settings</button>.</>
+                )}
+                {ticketError.includes('not found') && (
+                  <>Verify the ticket ID is correct (e.g., SUPPORT-1234).</>
+                )}
+                {!ticketError.includes('Invalid credentials') && !ticketError.includes('not found') && (
+                  <>You can still fill out the form manually below.</>
+                )}
               </div>
             </div>
           )}
@@ -430,6 +464,7 @@ export default function NewEscalation() {
               onClick={generatePreview}
               disabled={generating || !formData.ticketId}
               className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              title="Keyboard shortcut: Cmd/Ctrl + Enter"
             >
               {generating ? 'Generating...' : 'Preview & Review'}
             </button>
@@ -437,9 +472,16 @@ export default function NewEscalation() {
               type="button"
               onClick={() => navigate('/history')}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              title="Keyboard shortcut: Esc"
             >
               Cancel
             </button>
+          </div>
+
+          {/* Keyboard shortcuts hint */}
+          <div className="text-xs text-gray-500 text-center">
+            <span className="inline-block mr-3">⌘/Ctrl + Enter: Preview</span>
+            <span className="inline-block">⌘/Ctrl + S: Save Draft</span>
           </div>
         </div>
 
