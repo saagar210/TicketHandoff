@@ -4,6 +4,7 @@ use crate::services::ticket_system::TicketSystemClient;
 use async_trait::async_trait;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::Deserialize;
+use std::path::Path;
 use std::time::Duration;
 
 pub struct JiraClient {
@@ -130,6 +131,69 @@ impl JiraClient {
             )));
         } else if !status.is_success() {
             return Err(AppError::Jira(format!("Failed to post comment: {}", status)));
+        }
+
+        Ok(())
+    }
+
+    pub async fn attach_file(&self, key: &str, file_path: &Path) -> AppResult<()> {
+        // Validate file exists
+        if !file_path.exists() {
+            return Err(AppError::File(format!(
+                "File not found: {}",
+                file_path.display()
+            )));
+        }
+
+        // Validate file size (100MB limit)
+        let metadata = std::fs::metadata(file_path)?;
+        let size_mb = metadata.len() / (1024 * 1024);
+        if size_mb > 100 {
+            return Err(AppError::File(format!(
+                "File too large ({}MB). Jira limit is 100MB.",
+                size_mb
+            )));
+        }
+
+        let url = format!("{}/rest/api/3/issue/{}/attachments", self.base_url, key);
+
+        // Read file contents
+        let file_bytes = std::fs::read(file_path)?;
+        let file_name = file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| AppError::File("Invalid file name".to_string()))?;
+
+        // Create multipart form
+        let part = reqwest::multipart::Part::bytes(file_bytes)
+            .file_name(file_name.to_string())
+            .mime_str("application/octet-stream")
+            .map_err(|e| AppError::Jira(format!("Failed to create multipart: {}", e)))?;
+
+        let form = reqwest::multipart::Form::new().part("file", part);
+
+        let response = self
+            .client
+            .post(&url)
+            .header(AUTHORIZATION, self.auth_header())
+            .header("X-Atlassian-Token", "no-check") // Required by Jira
+            .multipart(form)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if status == 403 {
+            return Err(AppError::Jira(format!(
+                "No permission to attach files to {}. Check your API token permissions.",
+                key
+            )));
+        } else if status == 413 {
+            return Err(AppError::Jira(format!(
+                "File rejected by Jira (too large: {}MB). Try compressing it.",
+                size_mb
+            )));
+        } else if !status.is_success() {
+            return Err(AppError::Jira(format!("Failed to attach file: {}", status)));
         }
 
         Ok(())

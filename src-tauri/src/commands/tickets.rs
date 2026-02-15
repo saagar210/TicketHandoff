@@ -18,12 +18,43 @@ pub async fn post_to_jira(app: AppHandle, ticket_id: String, comment: String) ->
 
 #[tauri::command]
 pub async fn attach_files_to_jira(
-    _app: AppHandle,
-    _ticket_id: String,
-    _file_paths: Vec<String>,
+    app: AppHandle,
+    ticket_id: String,
+    file_paths: Vec<String>,
 ) -> Result<(), String> {
-    // Phase 4 implementation - not yet implemented
-    Err(String::from("File attachment not implemented yet"))
+    attach_files_to_jira_impl(app, ticket_id, file_paths)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+async fn attach_files_to_jira_impl(
+    app: AppHandle,
+    ticket_id: String,
+    file_paths: Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let client = get_jira_client(app).await?;
+
+    let mut failed_files = Vec::new();
+
+    for file_path in &file_paths {
+        let path = std::path::Path::new(file_path);
+        match client.attach_file(&ticket_id, path).await {
+            Ok(_) => {},
+            Err(e) => {
+                failed_files.push(format!("{}: {}", file_path, e));
+            }
+        }
+    }
+
+    if !failed_files.is_empty() {
+        return Err(format!(
+            "Failed to attach {} file(s):\n{}",
+            failed_files.len(),
+            failed_files.join("\n")
+        ).into());
+    }
+
+    Ok(())
 }
 
 async fn fetch_jira_ticket_impl(

@@ -43,6 +43,7 @@ export default function NewEscalation() {
   const [llmConfidence, setLlmConfidence] = useState<string>('');
   const [llmConfidenceReason, setLlmConfidenceReason] = useState<string>('');
   const [showLlmSection, setShowLlmSection] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ path: string; name: string; size: number }>>([]);
 
   const { saveEscalation, getEscalation } = useEscalations();
   const { ticket, loading: fetchingTicket, error: ticketError, fetch: fetchTicket } = useTicketData();
@@ -95,6 +96,48 @@ export default function NewEscalation() {
       setLlmConfidenceReason(result.confidenceReason);
       setShowLlmSection(true);
     }
+  };
+
+  // Attach files
+  const handleAttachFiles = async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selected = await open({
+        multiple: true,
+        title: 'Select files to attach',
+      });
+
+      if (selected) {
+        const files = Array.isArray(selected) ? selected : [selected];
+        const fileInfos = await Promise.all(
+          files.map(async (path) => {
+            // Get file stats
+            const { stat } = await import('@tauri-apps/plugin-fs');
+            const stats = await stat(path);
+            const name = path.split('/').pop() || path.split('\\').pop() || 'unknown';
+            return {
+              path,
+              name,
+              size: stats.size,
+            };
+          })
+        );
+        setAttachedFiles([...attachedFiles, ...fileInfos]);
+      }
+    } catch (error) {
+      console.error('Failed to select files:', error);
+      alert('Failed to select files: ' + error);
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setAttachedFiles(attachedFiles.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   // Update checklist when template changes
@@ -321,6 +364,45 @@ export default function NewEscalation() {
             />
           </div>
 
+          {/* File Attachments Section */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Attachments (Optional)
+              </label>
+              <button
+                type="button"
+                onClick={handleAttachFiles}
+                className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Attach Files
+              </button>
+            </div>
+
+            {attachedFiles.length > 0 && (
+              <div className="space-y-2">
+                {attachedFiles.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded-md"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{file.name}</div>
+                      <div className="text-xs text-gray-500">{formatFileSize(file.size)}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(index)}
+                      className="ml-2 text-red-600 hover:text-red-900"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-3">
             <button
               type="button"
@@ -351,6 +433,7 @@ export default function NewEscalation() {
         <ReviewModal
           markdown={markdown}
           ticketId={formData.ticketId}
+          attachedFiles={attachedFiles}
           onConfirm={handleSaveDraft}
           onCancel={() => setShowReviewModal(false)}
           onEdit={() => setShowReviewModal(false)}

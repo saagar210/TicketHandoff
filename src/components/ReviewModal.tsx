@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { postToJira } from '../lib/tauri';
+import { postToJira, attachFilesToJira } from '../lib/tauri';
 
 interface ReviewModalProps {
   markdown: string;
   ticketId: string;
+  attachedFiles?: Array<{ path: string; name: string; size: number }>;
   onConfirm: () => void;
   onCancel: () => void;
   onEdit: () => void;
@@ -14,6 +15,7 @@ interface ReviewModalProps {
 export default function ReviewModal({
   markdown,
   ticketId,
+  attachedFiles = [],
   onConfirm,
   onCancel,
   onEdit,
@@ -22,13 +24,32 @@ export default function ReviewModal({
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [postSuccess, setPostSuccess] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
 
   const handlePostToJira = async () => {
     setPosting(true);
     setPostError(null);
+    setUploadProgress('');
     try {
+      // Step 1: Post comment
+      setUploadProgress('Posting comment...');
       await postToJira(ticketId, markdown);
+
+      // Step 2: Upload attachments if any
+      if (attachedFiles.length > 0) {
+        setUploadProgress(`Uploading ${attachedFiles.length} file(s)...`);
+        const filePaths = attachedFiles.map(f => f.path);
+        await attachFilesToJira(ticketId, filePaths);
+      }
+
       setPostSuccess(true);
+      setUploadProgress('');
       if (onPostSuccess) {
         // Give user time to see success message
         setTimeout(() => {
@@ -38,6 +59,7 @@ export default function ReviewModal({
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       setPostError(errorMsg);
+      setUploadProgress('');
     } finally {
       setPosting(false);
     }
@@ -50,17 +72,27 @@ export default function ReviewModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
+          {/* Upload progress */}
+          {uploadProgress && (
+            <div className="mb-4 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+              <div className="font-medium">{uploadProgress}</div>
+            </div>
+          )}
+
           {/* Success message */}
           {postSuccess && (
             <div className="mb-4 p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
               <div className="font-medium">✓ Comment posted to {ticketId} successfully!</div>
+              {attachedFiles.length > 0 && (
+                <div className="mt-1">✓ {attachedFiles.length} file(s) attached</div>
+              )}
             </div>
           )}
 
           {/* Error message */}
           {postError && (
             <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm">
-              <div className="font-medium">Failed to post comment: {postError}</div>
+              <div className="font-medium">Failed to post: {postError}</div>
               <button
                 onClick={handlePostToJira}
                 disabled={posting}
@@ -68,6 +100,22 @@ export default function ReviewModal({
               >
                 Retry
               </button>
+            </div>
+          )}
+
+          {/* Attached files preview */}
+          {attachedFiles.length > 0 && (
+            <div className="mb-4 p-3 rounded-md bg-gray-50 border border-gray-200">
+              <div className="text-sm font-medium text-gray-700 mb-2">
+                Attachments ({attachedFiles.length})
+              </div>
+              <div className="space-y-1">
+                {attachedFiles.map((file, index) => (
+                  <div key={index} className="text-sm text-gray-600">
+                    • {file.name} ({formatFileSize(file.size)})
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

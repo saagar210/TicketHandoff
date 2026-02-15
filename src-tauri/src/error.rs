@@ -42,4 +42,10 @@ impl From<handlebars::TemplateError> for AppError {
     }
 }
 
+impl From<std::io::Error> for AppError {
+    fn from(err: std::io::Error) -> Self {
+        AppError::File(err.to_string())
+    }
+}
+
 pub type AppResult<T> = Result<T, AppError>;
