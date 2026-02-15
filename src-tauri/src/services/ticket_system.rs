@@ -3,6 +3,7 @@ use crate::models::JiraTicket;
 use async_trait::async_trait;
 
 #[async_trait]
+#[allow(dead_code)]
 pub trait TicketSystemClient {
     async fn fetch_ticket(&self, id: &str) -> AppResult<JiraTicket>;
     async fn post_comment(&self, id: &str, body: &str) -> AppResult<()>;
