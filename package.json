@@ -9,6 +9,8 @@
     "lint": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",
+    "clean": "rm -rf dist src-tauri/target .codex_audit && find . -name '.DS_Store' -type f -delete && rm -rf node_modules/.vite-temp",
+    "clean:deep": "npm run clean && rm -rf node_modules",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage"
