@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "lean:dev": "bash ./scripts/dev-lean.sh",
     "build": "tsc && vite build",
     "lint": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",
-    "clean": "rm -rf dist src-tauri/target .codex_audit && find . -name '.DS_Store' -type f -delete && rm -rf node_modules/.vite-temp",
-    "clean:deep": "npm run clean && rm -rf node_modules",
+    "clean": "npm run clean:heavy",
+    "clean:heavy": "rm -rf dist src-tauri/target node_modules/.vite node_modules/.vite-temp .codex_audit && find . -name '.DS_Store' -type f -delete",
+    "clean:deep": "npm run clean:full",
+    "clean:full": "npm run clean:heavy && rm -rf node_modules",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage"
