@@ -90,9 +90,18 @@ npm install
 # Run in development mode
 npm run tauri dev
 
+# Run in low-disk lean development mode
+npm run lean:dev
+
 # Build production app (creates .dmg installer)
 npm run tauri build
 ```
+
+### Normal Dev vs Lean Dev
+
+- `npm run tauri dev`: fastest repeat startup, but keeps Rust and Vite build artifacts in the repo (`src-tauri/target`, `node_modules/.vite`).
+- `npm run lean:dev`: routes Rust/Vite build caches to a temporary directory and removes heavy local build artifacts when the dev session exits.
+- Tradeoff: lean mode saves disk space aggressively, but each new session will usually compile more and start slower.
 
 ### First-Time Setup
 
@@ -324,6 +333,21 @@ TicketHandoff/
 ---
 
 ## Development
+
+### Dev Modes and Cleanup
+```bash
+# Standard local dev (faster warm restarts, higher disk use)
+npm run tauri dev
+
+# Lean local dev (lower disk use, slower cold starts)
+npm run lean:dev
+
+# Remove heavy build artifacts only (safe daily cleanup)
+npm run clean:heavy
+
+# Remove all reproducible local caches including dependencies
+npm run clean:full
+```
 
 ### Running Tests
 ```bash
